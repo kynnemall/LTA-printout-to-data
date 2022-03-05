@@ -7,8 +7,7 @@ Created on Wed Feb 23 12:20:10 2022
 
 import math
 import numpy as np
-import streamlit as st
-import plotly.express as px
+import pandas as pd
 import matplotlib.pyplot as plt
 from skimage.io import imread
 from skimage.filters import median
@@ -38,17 +37,19 @@ def get_points(mask):
     top_left = closest_point(0, 0, xvals, yvals)
     return origin, bottom_right, top_left
 
-def rotate_mask(mask, plot=False):
+def rotate_mask(mask):
     origin, bottom_right, top_left = get_points(mask)
-    if plot:
-       plt.imshow(mask)
-       plt.scatter(*bottom_right, c="red")
-       plt.scatter(*origin, c="green")
+    ax["B"].imshow(mask)
+    ax["B"].scatter(*bottom_right, c="red")
+    ax["B"].scatter(*origin, c="green")
+    ax["B"].axis("off")
     # construct triangle and use inverse tan to find the rotation angle
     bottom_length = abs(origin[0] - bottom_right[0])
     triangle_height = abs(origin[1] - bottom_right[1])
     anti_clockwise = origin[1] > bottom_right[1]
     angle = math.degrees(math.atan(triangle_height / bottom_length))
+    deg_sym = u'\N{DEGREE SIGN}'
+    ax["B"].set_title(f"Rotated image\nOffset angle: {angle:.2f}{deg_sym}")
     # set point about which to rotate the x axis
     if anti_clockwise:
         point = bottom_right
@@ -61,7 +62,8 @@ def rotate_mask(mask, plot=False):
     origin, bottom_right, top_left = get_points(rotated)
     return rotated, origin, top_left, bottom_right
 
-def coords_to_raw_data(coords, origin, top_left, bottom_right, time_in_s=450):
+def coords_to_raw_data(coords, origin, top_left, bottom_right, time_in_s,
+                       plot=True):
     minus10 = top_left[1]
     plus110 = origin[1]
     minute0 = origin[0]
@@ -78,48 +80,65 @@ def coords_to_raw_data(coords, origin, top_left, bottom_right, time_in_s=450):
     
     time = time * sec_per_px
     agg = agg * perc_agg_per_px - 10
+    # correct for y-axis label at 0 %
+    # time, agg = fix_erratic_sequences(time, agg)
     return time, agg
 
-def get_rotated(img):
-    filtered = median(img)
+def fix_erratic_sequences(x, y):
+    block_idx = (x > 40) * (x < 58)
+    block_fill = y[x < 40].mean()
+    idx = np.where(block_idx)
+    y[idx] = block_fill
+    return x, y
+
+if __name__ == "__main__":
+    # modify these parameters
+    filename = "test_600dpi_grayscale.tiff"
+    top_idx = 199       # x at top left in ImageJ
+    bottom_idx = 2610   # y at top left in ImageJ
+    left_idx = 1030     # x at bottom right in ImageJ
+    right_idx = 3850    # y at bottom right in ImageJ
+    time_seconds = 450
+    savename = "savename.csv"
+    
+    # filename = "test_not_angled.tiff"
+    # top_idx = 199       # x at top left in ImageJ
+    # bottom_idx = 2610   # y at top left in ImageJ
+    # left_idx = 1030     # x at bottom right in ImageJ
+    # right_idx = 3850    # y at bottom right in ImageJ
+    # time_seconds = 240
+    
+    filename = "test_angled.tiff"
+    top_idx = 272       # x at top left in ImageJ
+    bottom_idx = 3000   # y at top left in ImageJ
+    left_idx = 1199   # x at bottom right in ImageJ
+    right_idx = 3824    # y at bottom right in ImageJ
+    time_seconds = 240
+    
+    img = imread(filename)
+    filtered = median(img[top_idx:bottom_idx, left_idx:right_idx])
+    
+    ax = plt.figure(figsize=(7, 7), constrained_layout=True).subplot_mosaic(
+        """
+        AC
+        BC
+        """
+        )
+    ax["A"].imshow(filtered)
+    ax["A"].axis("off")
+    ax["A"].set_title("Input image")
     mask = filtered < 240
     rotated, *points = rotate_mask(mask)
-    return rotated, points
-
-def extract_curve(rotated, points, timelength):    
+    
     skeleton = skeletonize(rotated)
     props = regionprops(label(skeleton))
     areas = [p.area for p in props]
     idx = np.argmax(areas)
     coords = props[idx].coords
     agg_curve = coords[coords[:, 1].argsort()]
-    time, agg = coords_to_raw_data(agg_curve, *points, timelength)
-    return time, agg
-    
-# App setup
-st.set_page_config(page_title="LTA graph extractor",
-                   page_icon="chart_with_upwards_trend",
-                   layout="wide")
-st.set_option('deprecation.showPyplotGlobalUse', False)
-
-# layout app in columns
-col1, col2 = st.columns(2)
-upload = col1.file_uploader("Upload scanned LTA curve",
-                          type=("tif", "tiff", "png"))
-time_in_seconds = col2.number_input("Time (seconds)")
-
-if upload is not None and time_in_seconds > 0:
-    img = imread(upload)
-    h, w = img.shape
-    col3, col4 = st.columns(2)
-    # col3.image(img, caption='Uploaded Graph', use_column_width=True)
-    
-    with st.spinner("Correcting graph rotation"):
-        rotated, *points = get_rotated(img)
-    # col4.image(rotated, caption="Rotation Corrected", use_column_width=True)
-
-    with st.spinner("Extracting curve data"):
-        time, aggregation = extract_curve(rotated, *points, time_in_seconds)
-    fig = px.line(x=time, y=aggregation, title="Extracted Aggregation Curve")
-    fig.update_layout(xaxis_title="Time (minutes)")
-    st.plotly_chart(fig)
+    time, agg = coords_to_raw_data(agg_curve, *points, time_seconds)
+    ax["C"].plot(time, agg)
+    ax["C"].set_ylabel("% aggregation")
+    ax["C"].set_xlabel("Time (seconds")
+    df = pd.DataFrame({"time (seconds)" : time, "% aggregation" : agg})
+    # df.to_csv(savename, index=False)
