@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from skimage.io import imread
 from skimage.filters import median
 from skimage.transform import rotate
-from skimage.morphology import skeletonize
+from skimage.morphology import skeletonize, binary_dilation
 from skimage.measure import regionprops, label
 
 def distance(x0, y0, x1, y1):
@@ -37,7 +37,7 @@ def get_points(mask):
     top_left = closest_point(0, 0, xvals, yvals)
     return origin, bottom_right, top_left
 
-def rotate_mask(mask):
+def rotate_mask(mask, ax):
     origin, bottom_right, top_left = get_points(mask)
     ax["B"].imshow(mask)
     ax["B"].scatter(*bottom_right, c="red")
@@ -122,15 +122,16 @@ if __name__ == "__main__":
         """
         AC
         BC
-        """
-        )
+        """)
     ax["A"].imshow(filtered)
     ax["A"].axis("off")
     ax["A"].set_title("Input image")
     mask = filtered < 240
-    rotated, *points = rotate_mask(mask)
+    rotated, *points = rotate_mask(mask, ax)
     
-    skeleton = skeletonize(rotated)
+    # apply binary dilation to prevent fragmentation of aggregation curve
+    # before skeletonizing the mask
+    skeleton = skeletonize(binary_dilation(rotated))
     props = regionprops(label(skeleton))
     areas = [p.area for p in props]
     idx = np.argmax(areas)
