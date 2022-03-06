@@ -39,17 +39,17 @@ def get_points(mask):
 
 def rotate_mask(mask, ax):
     origin, bottom_right, top_left = get_points(mask)
-    ax["B"].imshow(mask)
-    ax["B"].scatter(*bottom_right, c="red")
-    ax["B"].scatter(*origin, c="green")
-    ax["B"].axis("off")
+    ax["A"].imshow(mask)
+    ax["A"].scatter(*bottom_right, c="red")
+    ax["A"].scatter(*origin, c="green")
+    ax["A"].axis("off")
+    ax["A"].set_title("Input image\nRed and Green markers indicate X-axis limits")
     # construct triangle and use inverse tan to find the rotation angle
     bottom_length = abs(origin[0] - bottom_right[0])
     triangle_height = abs(origin[1] - bottom_right[1])
     anti_clockwise = origin[1] > bottom_right[1]
     angle = math.degrees(math.atan(triangle_height / bottom_length))
-    deg_sym = u'\N{DEGREE SIGN}'
-    ax["B"].set_title(f"Rotated image\nOffset angle: {angle:.2f}{deg_sym}")
+    disp_angle = abs(angle)
     # set point about which to rotate the x axis
     if anti_clockwise:
         point = bottom_right
@@ -59,6 +59,11 @@ def rotate_mask(mask, ax):
     if anti_clockwise:
         angle = 360 - angle
     rotated = rotate(mask, angle, resize=True, center=point)
+
+    deg_sym = u'\N{DEGREE SIGN}'
+    ax["B"].imshow(rotated)
+    ax["B"].axis("off")
+    ax["B"].set_title(f"Rotated image\nOffset angle: {disp_angle:.2f}{deg_sym}")
     origin, bottom_right, top_left = get_points(rotated)
     return rotated, origin, top_left, bottom_right
 
@@ -84,12 +89,33 @@ def coords_to_raw_data(coords, origin, top_left, bottom_right, time_in_s,
     # time, agg = fix_erratic_sequences(time, agg)
     return time, agg
 
-def fix_erratic_sequences(x, y):
-    block_idx = (x > 40) * (x < 58)
-    block_fill = y[x < 40].mean()
-    idx = np.where(block_idx)
-    y[idx] = block_fill
-    return x, y
+def fix_erratic_sequences(y):
+    # get start and end indices of erratic sequences
+    cum_offset = np.cumsum(np.abs(y[1:] - y[:-1]))
+    offset = cum_offset[1:] - cum_offset[:-1]
+    mask = np.where(np.abs(offset) > 2)[0] # deviations of 2% aggregation
+    idxs = []
+    start = [0]
+    for i in start:
+        arr = mask[i:]
+        diff_length = len(mask) - len(arr)
+        diffs = np.concatenate(([0], arr[1:] - arr[:-1]))
+        where = np.where(diffs > 200)[0]
+        if len(where) > 0:
+            idx = where[0] + diff_length - 1
+            idxs.append((mask[i], arr[idx-diff_length]+2))
+            start.append(idx+1)
+        else:
+            idxs.append((arr[0], arr[-1]+2))
+    # want (289, 668), (1199, 1377), (1961, 2022), (2954, 3266)
+    # add 1 to the second element of each tuple
+    # above working as expected
+    
+    # fill between indices with the preceding value
+    for idx in idxs:
+        y[idx[0]:idx[1]] = y[idx[0]-1]
+
+    return y
 
 if __name__ == "__main__":
     # modify these parameters
@@ -102,30 +128,27 @@ if __name__ == "__main__":
     savename = "savename.csv"
     
     # filename = "test_not_angled.tiff"
-    # top_idx = 199       # x at top left in ImageJ
-    # bottom_idx = 2610   # y at top left in ImageJ
-    # left_idx = 1030     # x at bottom right in ImageJ
-    # right_idx = 3850    # y at bottom right in ImageJ
+    # top_idx = 199
+    # bottom_idx = 2610
+    # left_idx = 1030
+    # right_idx = 3850
     # time_seconds = 240
     
-    filename = "test_angled.tiff"
-    top_idx = 272       # x at top left in ImageJ
-    bottom_idx = 3000   # y at top left in ImageJ
-    left_idx = 1199   # x at bottom right in ImageJ
-    right_idx = 3824    # y at bottom right in ImageJ
-    time_seconds = 240
+    # filename = "test_angled.tiff"
+    # top_idx = 272
+    # bottom_idx = 3000
+    # left_idx = 1199
+    # right_idx = 3824
+    # time_seconds = 240
     
     img = imread(filename)
     filtered = median(img[top_idx:bottom_idx, left_idx:right_idx])
     
-    ax = plt.figure(figsize=(7, 7), constrained_layout=True).subplot_mosaic(
+    ax = plt.figure(figsize=(8, 8), constrained_layout=True).subplot_mosaic(
         """
         AC
         BC
         """)
-    ax["A"].imshow(filtered)
-    ax["A"].axis("off")
-    ax["A"].set_title("Input image")
     mask = filtered < 240
     rotated, *points = rotate_mask(mask, ax)
     
@@ -138,8 +161,10 @@ if __name__ == "__main__":
     coords = props[idx].coords
     agg_curve = coords[coords[:, 1].argsort()]
     time, agg = coords_to_raw_data(agg_curve, *points, time_seconds)
+    agg = fix_erratic_sequences(agg)
     ax["C"].plot(time, agg)
     ax["C"].set_ylabel("% aggregation")
     ax["C"].set_xlabel("Time (seconds")
+    plt.show()
     df = pd.DataFrame({"time (seconds)" : time, "% aggregation" : agg})
     # df.to_csv(savename, index=False)
