@@ -15,7 +15,45 @@ from skimage.transform import rotate
 from skimage.morphology import skeletonize, binary_dilation
 from skimage.measure import regionprops, label
 
+def show_image(filepath):
+    """
+    Show the image so the user can choose the coordinates of the bounding box
+    for the graph
+
+    Parameters
+    ----------
+    filepath : string
+        path to the image from which a graph is to be extracted
+
+    Returns
+    -------
+    None.
+
+    """
+    img = imread(filepath)
+    plt.imshow(img)
+
 def distance(x0, y0, x1, y1):
+    """
+    Euclidean distance between (x0, y0) and (x1, y1)
+
+    Parameters
+    ----------
+    x0 : float
+        x intercept of first point
+    y0 : float
+        y intercept of first point
+    x1 : float
+        x intercept of second point
+    y1 : float
+        y intercept of second point
+
+    Returns
+    -------
+    d : float
+        distance between given points
+
+    """
     x_diff = x1 - x0
     y_diff = y1 - y0
     squared = x_diff*x_diff + y_diff*y_diff
@@ -23,11 +61,52 @@ def distance(x0, y0, x1, y1):
     return d
 
 def closest_point(pt_x, pt_y, xvals, yvals):
+    """
+    Find point in a list of x and y values that is closest to a given point
+
+    Parameters
+    ----------
+    pt_x : float
+        x intercept of given point
+    pt_y : float
+        y intercept of given point
+    xvals : list
+        x intercepts
+    yvals : list
+        y intercepts
+
+    Returns
+    -------
+    float
+        x intercept of closest point
+    TYPE
+        y intercept of closest point
+
+    """
     distances = [distance(pt_x, pt_y, x, y) for x,y in zip(xvals, yvals)]
     idx = np.argmin(distances)
     return xvals[idx], yvals[idx]
 
 def get_points(mask):
+    """
+    Get pixel coordinates of the origin, top of the y axis, and the end of 
+    the x axis
+
+    Parameters
+    ----------
+    mask : 2D array
+        binary mask of image data
+
+    Returns
+    -------
+    origin : tuple
+        pixel coordinates of the origin
+    bottom_right : tuple
+        pixel coordinates of the top of the y axis
+    top_left : tuple
+        pixel coordinates of the the end of the x axis
+
+    """
     h, w = mask.shape
     props = regionprops(label(mask))
     xvals = [p.centroid[1] for p in props if 20 < p.area < 116]
@@ -38,6 +117,30 @@ def get_points(mask):
     return origin, bottom_right, top_left
 
 def rotate_mask(mask, ax):
+    """
+    Calculate the angle theta of the X axis and rotate the image theta
+    degrees in the opposite direction to align the X axis with the bottom
+    of the image
+
+    Parameters
+    ----------
+    mask : 2D array
+        binary mask of image data
+    ax : axes
+        axes on which to plot the rotated image
+
+    Returns
+    -------
+    rotated : 2D array
+        binary mask of rotation-corrected image data
+    origin : tuple
+        pixel coordinates of the origin
+    bottom_right : tuple
+        pixel coordinates of the top of the y axis
+    top_left : tuple
+        pixel coordinates of the the end of the x axis
+
+    """
     origin, bottom_right, top_left = get_points(mask)
     ax["A"].imshow(mask)
     ax["A"].scatter(*bottom_right, c="red")
@@ -67,8 +170,31 @@ def rotate_mask(mask, ax):
     origin, bottom_right, top_left = get_points(rotated)
     return rotated, origin, top_left, bottom_right
 
-def coords_to_raw_data(coords, origin, top_left, bottom_right, time_in_s,
-                       plot=True):
+def coords_to_raw_data(coords, origin, top_left, bottom_right, time_in_s):
+    """
+    
+
+    Parameters
+    ----------
+    coords : list
+        pixel coordinates belonging to skeletonized aggregation curve
+    origin : tuple
+        pixel coordinates of the origin
+    bottom_right : tuple
+        pixel coordinates of the top of the y axis
+    top_left : tuple
+        pixel coordinates of the the end of the x axis
+    time_in_s : integer
+        time in seconds represented by the dots of the X axis
+
+    Returns
+    -------
+    time : 1D array
+        timepoints for the X axis
+    agg : 1D array
+        percent aggregation points for the Y axis
+
+    """
     minus10 = top_left[1]
     plus110 = origin[1]
     minute0 = origin[0]
@@ -90,6 +216,21 @@ def coords_to_raw_data(coords, origin, top_left, bottom_right, time_in_s,
     return time, agg
 
 def fix_erratic_sequences(y):
+    """
+    Correct block-like sequences in the aggregation data and fill these blocks
+    with the immediate value preceding the blocks
+
+    Parameters
+    ----------
+    y : 1D array
+        percent aggregation points for the Y axis
+
+    Returns
+    -------
+    y : 1D array
+        percent aggregation points for the Y axis
+
+    """
     # get start and end indices of erratic sequences
     cum_offset = np.cumsum(np.abs(y[1:] - y[:-1]))
     offset = cum_offset[1:] - cum_offset[:-1]
@@ -117,32 +258,40 @@ def fix_erratic_sequences(y):
 
     return y
 
-if __name__ == "__main__":
-    # modify these parameters
-    filename = "test_600dpi_grayscale.tiff"
-    top_idx = 199       # x at top left in ImageJ
-    bottom_idx = 2610   # y at top left in ImageJ
-    left_idx = 1030     # x at bottom right in ImageJ
-    right_idx = 3850    # y at bottom right in ImageJ
-    time_seconds = 450
-    savename = "savename.csv"
-    
-    # filename = "test_not_angled.tiff"
-    # top_idx = 199
-    # bottom_idx = 2610
-    # left_idx = 1030
-    # right_idx = 3850
-    # time_seconds = 240
-    
-    # filename = "test_angled.tiff"
-    # top_idx = 272
-    # bottom_idx = 3000
-    # left_idx = 1199
-    # right_idx = 3824
-    # time_seconds = 240
-    
-    img = imread(filename)
-    filtered = median(img[top_idx:bottom_idx, left_idx:right_idx])
+def process_graph(filepath, top, bottom, left, right, time_seconds, savename,
+                  test=False):
+    """
+    Load the image file containing the graph, apply image processing workflow,
+    plot the resulting raw data, and save in CSV format.
+    If testing, the raw data is returned for evaluation
+
+    Parameters
+    ----------
+    filepath : string
+        path to the image from which a graph is to be extracted
+    top : integer
+        y coordinate of the top of the image subsection
+    bottom : integer
+        y coordinate of the bottom of the image subsection
+    left : integer
+        x coordinate of the left of the image subsection
+    right : integer
+        x coordinate of the right of the image subsection
+    time_seconds : integer
+        time in seconds represented by the dots of the X axis
+    savename : string
+        filename for data output
+    test : boolean
+        whether the function is run for evaluation or testing purposes. Default
+        is False
+
+    Returns
+    -------
+    None.
+
+    """
+    img = imread(filepath)
+    filtered = median(img[top:bottom, left:right])
     
     ax = plt.figure(figsize=(8, 8), constrained_layout=True).subplot_mosaic(
         """
@@ -162,9 +311,16 @@ if __name__ == "__main__":
     agg_curve = coords[coords[:, 1].argsort()]
     time, agg = coords_to_raw_data(agg_curve, *points, time_seconds)
     agg = fix_erratic_sequences(agg)
+    df = pd.DataFrame({"time (seconds)" : time, "% aggregation" : agg})
+    
     ax["C"].plot(time, agg)
     ax["C"].set_ylabel("% aggregation")
     ax["C"].set_xlabel("Time (seconds")
-    plt.show()
-    df = pd.DataFrame({"time (seconds)" : time, "% aggregation" : agg})
-    # df.to_csv(savename, index=False)
+    if not test:
+        plt.show()
+        if not savename.endswith(".csv"):
+            savename = savename + ".csv"
+        df.to_csv(savename, index=False)
+        print(f"Extracted curve data saved as {savename}")
+    else:
+        return df
