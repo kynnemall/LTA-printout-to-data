@@ -10,22 +10,24 @@ from tests import run_tests
 from process import show_image, process_graph
 
 decision = input("""
-Type "a" and press enter to view the graph and note down the
-(x, y) coordinates of the top (upper left) and bottom (lower right) 
-of the graph.
+Type one of the followings command and press Enter to run that command:
 
-Type "test" to run the program to tests to ensure the workflow works
-as desired.
+1. "start" to view the graph and note down the (x, y) coordinates of the top
+(upper left) and bottom (lower right) of the graph.
 
-Otherwise, type nothing and press enter to proceed to image processing.
+2. "extract" to run the image processing procedure.
+
+3. "test" to run the program tests to ensure the workflow works as desired.
+
+Press CTRL + C to exit the program.
 """)
-                 
-if decision == "a":
+
+if decision == "start":
     filepath = input("Paste the full path to the input image\n")
     show_image(filepath)
 elif decision == "test":
     run_tests()
-else:
+elif decision == "extract":
     filepath = input("Paste the full path to the input image\n")
     top = input("Enter the Y coordinate of the upper left and press Enter\n")
     left = input("Enter the X coordinate of the upper left and press Enter\n")
@@ -35,3 +37,5 @@ else:
     savename = input("Enter a filename to save the raw data and press Enter\n")
     process_graph(filepath, int(top), int(bottom), int(left), int(right),
                   int(time_seconds), savename)
+else:
+    print("Invalid option. Program closing.")
