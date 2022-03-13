@@ -32,6 +32,7 @@ def show_image(filepath):
     """
     img = imread(filepath)
     plt.imshow(img)
+    plt.show()
 
 def distance(x0, y0, x1, y1):
     """
