@@ -30,10 +30,17 @@ def run_tests():
                   "right" : 3850, "time_seconds" : 450},
                  {"filepath" : "test_angled.tiff",
                   "top" : 272, "bottom" : 3000, "left" : 1199,
-                  "right" : 3824, "time_seconds" : 240}
+                  "right" : 3824, "time_seconds" : 240},
+                 {"filepath" : "test_30_degrees.tiff",
+                  "top" : 511, "bottom" : 3688, "left" : 705,
+                  "right" : 4258, "time_seconds" : 315},
+                 {"filepath" : "test_45_degrees.tiff",
+                  "top" : 500, "bottom" : 4159, "left" : 690,
+                  "right" : 4162, "time_seconds" : 315}
                  ]
     test_dfs = ["test_600dpi_grayscale.csv", "test_not_angled.csv",
-                "test_angled.csv"]
+                "test_angled.csv", "test_30_degrees.csv",
+                "test_45_degrees.csv"]
     
     for i, (df, test) in enumerate(zip(test_dfs, test_data), 1):
         data = process_graph(**test, savename="", test=True)
