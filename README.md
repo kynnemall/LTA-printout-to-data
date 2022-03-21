@@ -3,6 +3,9 @@
 # LTA-printout-to-data
 A terminal app that takes high-quality images and extracts aggregation curves so you can create custom graphs with the raw data.
 
+### Setup
+Run `pip install -r requirements.txt` to install the required libraries.
+
 ### How it works
 1. The app processes 600 DPI TIFF or PNG images to achieve accurate data recovery from graphs containing a single aggregation curve.
 2. Segmentation techniques are used to estimate tilt in the graph and align the axes with the image edges.
