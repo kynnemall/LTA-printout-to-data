@@ -30,6 +30,18 @@ def show_image(filepath):
     None.
 
     """
+    
+    def on_xlims_change(event_ax):
+        x0, x1 = event_ax.get_xlim()
+        print(f"Upper left X:\t{x0}\nBottom right X:\t{x1}")
+    
+    def on_ylims_change(event_ax):
+        y1, y0 = event_ax.get_ylim()
+        print(f"Upper left Y:\t{y0}\nBottom right Y:\t{y1}\n")
+    
+    fig, ax = plt.subplots(1, 1)
+    ax.callbacks.connect('xlim_changed', on_xlims_change)
+    ax.callbacks.connect('ylim_changed', on_ylims_change)
     img = imread(filepath)
     plt.imshow(img)
     plt.show()
