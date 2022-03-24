@@ -33,10 +33,12 @@ def show_image(filepath):
     
     def on_xlims_change(event_ax):
         x0, x1 = event_ax.get_xlim()
+        x0, x1 = int(x0), int(x1)
         print(f"Upper left X:\t{x0}\nBottom right X:\t{x1}")
     
     def on_ylims_change(event_ax):
         y1, y0 = event_ax.get_ylim()
+        y0, y1 = int(y0), int(y1)
         print(f"Upper left Y:\t{y0}\nBottom right Y:\t{y1}\n")
     
     fig, ax = plt.subplots(1, 1)
@@ -122,8 +124,8 @@ def get_points(mask):
     """
     h, w = mask.shape
     props = regionprops(label(mask))
-    xvals = [p.centroid[1] for p in props if 20 < p.area < 116]
-    yvals = [p.centroid[0] for p in props if 20 < p.area < 116]
+    xvals = [p.centroid[1] for p in props if 20 < p.area < 60]
+    yvals = [p.centroid[0] for p in props if 20 < p.area < 60]
     origin = closest_point(0, h, xvals, yvals)
     bottom_right = closest_point(w, h, xvals, yvals)
     top_left = closest_point(0, 0, xvals, yvals)
